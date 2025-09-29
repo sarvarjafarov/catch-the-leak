@@ -1,0 +1,71 @@
+{
+  "name": "GameSession",
+  "type": "object",
+  "properties": {
+    "player_name": {
+      "type": "string",
+      "description": "Player's name or identifier"
+    },
+    "final_score": {
+      "type": "number",
+      "description": "Final game score"
+    },
+    "correct_catches": {
+      "type": "number",
+      "description": "Number of AI-generated content caught correctly"
+    },
+    "missed_ai": {
+      "type": "number",
+      "description": "Number of AI-generated content that fell"
+    },
+    "wrong_catches": {
+      "type": "number",
+      "description": "Number of human content caught incorrectly"
+    },
+    "game_duration": {
+      "type": "number",
+      "description": "Game duration in seconds"
+    },
+    "difficulty_level": {
+      "type": "string",
+      "enum": [
+        "easy",
+        "medium",
+        "hard"
+      ],
+      "default": "medium"
+    }
+  },
+  "required": [
+    "final_score",
+    "correct_catches",
+    "missed_ai",
+    "wrong_catches"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "write": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

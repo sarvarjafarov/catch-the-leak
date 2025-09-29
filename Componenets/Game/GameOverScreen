@@ -1,0 +1,183 @@
+
+import React, { useState } from 'react';
+import { Trophy, RotateCcw, Download, Linkedin, CheckCircle, Lock } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+export default function GameOverScreen({ 
+  finalScore, 
+  stats, 
+  onRestart, 
+  onSaveScore,
+  difficulty = 'medium'
+}) {
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const getScoreRating = (score, difficulty) => {
+    const thresholds = {
+      easy: { expert: 600, conscious: 400, getting: 250, practice: 150 },
+      medium: { expert: 800, conscious: 600, getting: 400, practice: 200 },
+      hard: { expert: 1000, conscious: 750, getting: 500, practice: 250 }
+    };
+    
+    const t = thresholds[difficulty];
+    
+    if (score >= t.expert) return { text: "Cybersecurity Expert!", color: "text-green-400" };
+    if (score >= t.conscious) return { text: "Security Conscious", color: "text-blue-400" };
+    if (score >= t.getting) return { text: "Getting There", color: "text-yellow-400" };
+    if (score >= t.practice) return { text: "Needs Practice", color: "text-orange-400" };
+    return { text: "Security Risk", color: "text-red-400" };
+  };
+
+  const rating = getScoreRating(finalScore, difficulty);
+
+  const handleSaveScore = async () => {
+    setIsSaving(true);
+    await onSaveScore(); // This prop is expected to handle the actual saving/email logic
+    setIsSaving(false);
+  };
+
+  const handleLinkedInShare = () => {
+    const difficultyEmoji = {
+      easy: '⭐',
+      medium: '🛡️', 
+      hard: '🔥'
+    };
+
+    const shareText = `🎮 Just played "Catch the Leak" at the TechCrunch booth by @Polygraf AI — and wow…
+
+It's scary how easy it is to miss AI-generated data leaks in things like Slack messages, Zoom chats, and emails.
+
+I scored ${finalScore} on ${difficultyEmoji[difficulty]} ${difficulty.toUpperCase()} mode, but it's clear that manual detection isn't enough anymore.
+
+🔐 Polygraf helps teams detect AI-written content, confidential leaks, and even Grammarly-enhanced edits — in real time.
+
+If you're serious about data protection, check it out and claim your 10,000 free tokens like I just did:
+👉 https://polygraf.ai
+
+#PolygrafAI #TechCrunch #AIsecurity #dataprivacy #AIleakdetection #CatchTheLeak`;
+
+    const url = `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(shareText)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+      <Card className="w-full max-w-2xl bg-gray-900/95 border-cyan-400/20 shadow-2xl shadow-cyan-400/10 mx-2 max-h-[95vh] overflow-y-auto">
+        <CardContent className="p-4 sm:p-6 lg:p-8 text-center">
+          {/* Header */}
+          <div className="mb-6 sm:mb-8">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+              <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">Game Over!</h2>
+            <p className={`text-lg sm:text-xl font-semibold ${rating.color}`}>{rating.text}</p>
+            <div className="mt-2 flex items-center justify-center gap-2 text-gray-300">
+              <span className="text-sm">Difficulty:</span>
+              <span className={`text-sm font-bold capitalize ${
+                difficulty === 'easy' ? 'text-green-400' :
+                difficulty === 'hard' ? 'text-red-400' : 'text-blue-400'
+              }`}>
+                {difficulty === 'easy' ? '⭐' : difficulty === 'hard' ? '🔥' : '🛡️'} {difficulty}
+              </span>
+            </div>
+          </div>
+
+          {/* Score Display */}
+          <div className="mb-6 sm:mb-8">
+            <div className="text-4xl sm:text-5xl lg:text-6xl font-bold text-cyan-400 mb-2">{finalScore}</div>
+            <p className="text-sm sm:text-base text-gray-300">Final Score</p>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-6 sm:mb-8">
+            <div className="bg-green-900/30 border border-green-400/20 rounded-lg p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-green-400">{stats.correct}</div>
+              <div className="text-xs text-gray-300">Correct Catches</div>
+            </div>
+            <div className="bg-red-900/30 border border-red-400/20 rounded-lg p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-red-400">{stats.missed}</div>
+              <div className="text-xs text-gray-300">AI Missed</div>
+            </div>
+            <div className="bg-orange-900/30 border border-orange-400/20 rounded-lg p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-orange-400">{stats.wrong}</div>
+              <div className="text-xs text-gray-300">Wrong Catches</div>
+            </div>
+            <div className="bg-blue-900/30 border border-blue-400/20 rounded-lg p-3 sm:p-4">
+              <div className="text-xl sm:text-2xl font-bold text-blue-400">
+                {Math.round(stats.correct / (stats.correct + stats.wrong + stats.missed) * 100) || 0}%
+              </div>
+              <div className="text-xs text-gray-300">Accuracy</div>
+            </div>
+          </div>
+
+          {/* Polygraf Message */}
+          <div className="bg-gradient-to-r from-cyan-900/30 to-blue-900/30 border border-cyan-400/20 rounded-lg p-4 sm:p-6 mb-6 sm:mb-8 text-left">
+            <h3 className="text-lg sm:text-xl font-bold text-cyan-400 mb-3 text-center">
+              Game Over… but the real world doesn't pause.
+            </h3>
+            <p className="text-sm sm:text-base text-gray-300 mb-4 text-center">
+              Every day, thousands of people unknowingly leak private data in Slack, Zoom, or even a Word doc. Polygraf AI can catch what you miss.
+            </p>
+            <div className="space-y-2 sm:space-y-3 my-4 sm:my-6">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm sm:text-base text-gray-200">Share your result on LinkedIn</p>
+              </div>
+              <div className="flex items-start gap-2 sm:gap-3">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm sm:text-base text-gray-200">Tag us and claim your <span className="font-bold text-yellow-400">10,000 free tokens</span></p>
+              </div>
+              <div className="flex items-start gap-2 sm:gap-3">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm sm:text-base text-gray-200">Start detecting AI-generated risks instantly</p>
+              </div>
+            </div>
+            <p className="text-center font-semibold text-sm sm:text-base text-gray-200 flex items-center justify-center gap-2">
+              <Lock className="w-4 h-4" /> The future belongs to those who protect it.
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-3 sm:gap-4 justify-center">
+            <Button
+              onClick={onRestart}
+              className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold px-6 sm:px-8 py-3 text-sm sm:text-base w-full sm:w-auto min-h-[48px] active:scale-95 transition-all"
+            >
+              <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+              Play Again
+            </Button>
+            
+            <Button
+              onClick={handleSaveScore}
+              disabled={isSaving}
+              variant="outline"
+              className="border-green-400/50 text-green-400 hover:bg-green-400/10 px-6 sm:px-8 py-3 text-sm sm:text-base w-full sm:w-auto min-h-[48px] active:scale-95 transition-all"
+            >
+              <Download className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+              {isSaving ? 'Sending Email...' : 'Save Score & Get Tokens'}
+            </Button>
+            
+            <Button
+              onClick={handleLinkedInShare}
+              variant="outline"
+              className="border-blue-400/50 text-blue-400 hover:bg-blue-400/10 px-6 sm:px-8 py-3 text-sm sm:text-base w-full sm:w-auto min-h-[48px] active:scale-95 transition-all"
+            >
+              <Linkedin className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+              <span className="hidden sm:inline">Share on LinkedIn</span>
+              <span className="sm:hidden">Share Results</span>
+            </Button>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-700">
+            <p className="text-xs sm:text-sm text-gray-400">
+              Powered by <span className="text-cyan-400 font-semibold">Polygraf AI</span> • 
+              Advanced Cybersecurity Solutions
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

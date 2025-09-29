@@ -1,0 +1,376 @@
+
+import React, { useState, useEffect, useRef } from 'react';
+import { GameSession } from '@/entities/GameSession';
+import { User } from '@/entities/User';
+import FallingDataObject from '../components/game/FallingDataObject';
+import GameHUD from '../components/game/GameHUD';
+import GameOverScreen from '../components/game/GameOverScreen';
+import StartScreen from '../components/game/StartScreen';
+import { SendEmail } from '@/integrations/Core';
+
+export default function Game() {
+  const [gameState, setGameState] = useState('start'); // 'start', 'playing', 'gameOver'
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [fallingObjects, setFallingObjects] = useState([]);
+  const [stats, setStats] = useState({
+    correct: 0,
+    wrong: 0,
+    missed: 0
+  });
+  const [playerEmail, setPlayerEmail] = useState('');
+  const [difficulty, setDifficulty] = useState('medium');
+  const [screenDimensions, setScreenDimensions] = useState({ width: 0, height: 0 });
+  
+  const gameAreaRef = useRef(null);
+  const objectSpawnTimer = useRef(null);
+  const gameTimer = useRef(null);
+
+  // Initialize screen dimensions
+  useEffect(() => {
+    const updateDimensions = () => {
+      setScreenDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
+  // Game timer
+  useEffect(() => {
+    if (gameState === 'playing' && timeLeft > 0) {
+      gameTimer.current = setTimeout(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && gameState === 'playing') {
+      endGame();
+    }
+
+    return () => {
+      if (gameTimer.current) {
+        clearTimeout(gameTimer.current);
+      }
+    };
+  }, [gameState, timeLeft]);
+
+  // Object spawning - adjusted for difficulty
+  useEffect(() => {
+    if (gameState === 'playing') {
+      const spawnObject = () => {
+        const isMobile = screenDimensions.width < 640;
+        const objectWidth = isMobile ? screenDimensions.width * 0.8 : 200;
+        const safeZone = objectWidth / 2 + 20;
+        const spawnZone = screenDimensions.width - (safeZone * 2);
+        
+        // Adjust speed based on difficulty
+        const getSpeedRange = () => {
+          const baseSpeed = isMobile ? 1.5 : 2;
+          const speedVariation = isMobile ? 2 : 3;
+          
+          switch (difficulty) {
+            case 'easy':
+              return { min: baseSpeed * 0.7, max: speedVariation * 0.7 };
+            case 'hard':
+              return { min: baseSpeed * 1.5, max: speedVariation * 1.5 };
+            default:
+              return { min: baseSpeed, max: speedVariation };
+          }
+        };
+        
+        const speedRange = getSpeedRange();
+        
+        const newObject = {
+          id: Math.random().toString(36).substr(2, 9),
+          position: Math.random() * spawnZone + safeZone,
+          speed: speedRange.min + Math.random() * speedRange.max,
+          createdAt: Date.now()
+        };
+
+        setFallingObjects(prev => [...prev, newObject]);
+      };
+
+      // Adjust spawn intervals based on difficulty
+      const getSpawnInterval = () => {
+        const isMobile = screenDimensions.width < 640;
+        const baseInterval = isMobile ? 1500 : 1000;
+        const variation = isMobile ? 1000 : 1000;
+        
+        switch (difficulty) {
+          case 'easy':
+            return baseInterval * 1.5 + Math.random() * variation;
+          case 'hard':
+            return baseInterval * 0.6 + Math.random() * (variation * 0.5);
+          default:
+            return baseInterval + Math.random() * variation;
+        }
+      };
+
+      const spawnInterval = getSpawnInterval();
+      objectSpawnTimer.current = setTimeout(spawnObject, spawnInterval);
+
+      return () => {
+        if (objectSpawnTimer.current) {
+          clearTimeout(objectSpawnTimer.current);
+        }
+      };
+    }
+  }, [gameState, fallingObjects, screenDimensions, difficulty]);
+
+  // Clean up old objects
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      setFallingObjects(prev => 
+        prev.filter(obj => Date.now() - obj.createdAt < 10000) // Remove objects older than 10 seconds
+      );
+    }, 5000);
+
+    return () => clearInterval(cleanup);
+  }, []);
+
+  const startGame = (email, selectedDifficulty) => {
+    setPlayerEmail(email);
+    setDifficulty(selectedDifficulty);
+    setGameState('playing');
+    setScore(0);
+    setTimeLeft(30);
+    setStats({ correct: 0, wrong: 0, missed: 0 });
+    setFallingObjects([]);
+  };
+
+  const endGame = () => {
+    setGameState('gameOver');
+    // Clean up timers
+    if (objectSpawnTimer.current) clearTimeout(objectSpawnTimer.current);
+    if (gameTimer.current) clearTimeout(gameTimer.current);
+  };
+
+  const handleCatch = (type, points) => {
+    setScore(prev => Math.max(0, prev + points));
+    
+    if (type === 'correct') {
+      setStats(prev => ({ ...prev, correct: prev.correct + 1 }));
+    } else {
+      setStats(prev => ({ ...prev, wrong: prev.wrong + 1 }));
+    }
+  };
+
+  const handleMiss = (type) => {
+    if (type === 'ai-missed') {
+      setScore(prev => Math.max(0, prev - 25));
+      setStats(prev => ({ ...prev, missed: prev.missed + 1 }));
+    }
+  };
+
+  const removeObject = (objectId) => {
+    setFallingObjects(prev => prev.filter(obj => obj.id !== objectId));
+  };
+
+  const restartGame = () => {
+    setGameState('start');
+    setScore(0);
+    setTimeLeft(30);
+    setStats({ correct: 0, wrong: 0, missed: 0 });
+    setFallingObjects([]);
+  };
+
+  const sendCompletionEmail = async () => {
+    try {
+      const emailBody = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Access Code + Tokens Are Ready</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; }
+        .highlight { background: #e3f2fd; padding: 15px; border-left: 4px solid #2196f3; margin: 20px 0; }
+        .token-box { background: #e8f5e8; padding: 20px; border: 2px solid #4caf50; border-radius: 8px; text-align: center; margin: 20px 0; }
+        .access-code { background: #fff3cd; padding: 15px; border: 2px solid #ffc107; border-radius: 8px; font-family: monospace; font-size: 18px; text-align: center; margin: 20px 0; }
+        .features { margin: 20px 0; }
+        .features ul { list-style: none; padding: 0; }
+        .features li { padding: 8px 0; padding-left: 30px; position: relative; }
+        .features li:before { content: "✅"; position: absolute; left: 0; }
+        .cta-button { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold; margin: 10px 0; }
+        .footer { text-align: center; color: #666; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; }
+        .score-highlight { background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); color: white; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔐 You're in – Your Access Code + Tokens Are Ready</h1>
+        <p>Thanks for completing Catch the Leak by Polygraf AI!</p>
+    </div>
+    
+    <div class="content">
+        <div class="score-highlight">
+            <h2>🎮 Your Game Results</h2>
+            <p><strong>Final Score:</strong> ${score} points</p>
+            <p><strong>Difficulty:</strong> ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}</p>
+            <p><strong>AI Threats Caught:</strong> ${stats.correct}</p>
+        </div>
+
+        <p>Hi there,</p>
+        
+        <p>Thanks for starting your mission with Catch the Leak by Polygraf AI.</p>
+        
+        <div class="highlight">
+            <h3>🔐 Every day, thousands of companies leak sensitive data through:</h3>
+            <ul>
+                <li>Slack chats</li>
+                <li>Zoom calls</li>
+                <li>Printed or AI-generated documents</li>
+            </ul>
+        </div>
+        
+        <p>That's why we built Polygraf — to detect and stop these leaks using:</p>
+        
+        <div class="features">
+            <ul>
+                <li><strong>Slack DLP</strong> – catch confidential info slipping through team chats</li>
+                <li><strong>AI Voice Detector</strong> – analyze audio, calls, or transcriptions</li>
+                <li><strong>Interview Fraud Detector</strong> – stop impersonation and AI-enhanced cheating</li>
+            </ul>
+        </div>
+        
+        <div class="token-box">
+            <h3>🎁 You've unlocked 10,000 tokens to try our platform</h3>
+        </div>
+        
+        <div class="access-code">
+            <h4>Your Access Code (Base44):</h4>
+            <strong>POLYGRAF-${Math.random().toString(36).substr(2, 9).toUpperCase()}</strong>
+        </div>
+        
+        <p style="text-align: center;">
+            <a href="https://polygraf.ai" class="cta-button">🔗 Activate your tokens</a>
+        </p>
+        
+        <div class="highlight">
+            <p><strong>💬 Share your game score and tag #PolygrafAI on LinkedIn — we'll feature top scorers next week!</strong></p>
+        </div>
+        
+        <div class="footer">
+            <p>Stay secure,<br>
+            <strong>The Polygraf Team</strong><br>
+            <a href="https://polygraf.ai">https://polygraf.ai</a></p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+      await SendEmail({
+        from_name: "Polygraf AI Team",
+        to: playerEmail,
+        subject: "You're in – Your Access Code + Tokens Are Ready",
+        body: emailBody
+      });
+
+      console.log('Completion email sent successfully to:', playerEmail);
+    } catch (error) {
+      console.error('Error sending completion email:', error);
+      // Don't throw error here as we don't want to break the game flow
+    }
+  };
+
+  const saveScore = async () => {
+    try {
+      await GameSession.create({
+        player_name: playerEmail,
+        final_score: score,
+        correct_catches: stats.correct,
+        missed_ai: stats.missed,
+        wrong_catches: stats.wrong,
+        game_duration: 30,
+        difficulty_level: difficulty
+      });
+
+      // Send completion email
+      await sendCompletionEmail();
+      
+      alert('Score saved successfully! Check your email for your access code and tokens.');
+    } catch (error) {
+      console.error('Error saving score:', error);
+      alert('Failed to save score. Please try again.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-blue-900 overflow-hidden relative">
+      {/* Cyberpunk Background Effects - Adjusted for mobile */}
+      <div className="absolute inset-0 opacity-20">
+        <div className="absolute top-20 left-4 sm:left-10 w-1 h-1 sm:w-2 sm:h-2 bg-cyan-400 rounded-full animate-ping"></div>
+        <div className="absolute top-40 right-4 sm:right-20 w-1 h-1 bg-green-400 rounded-full animate-pulse"></div>
+        <div className="absolute bottom-20 left-4 sm:left-20 w-2 h-2 sm:w-3 sm:h-3 bg-purple-400 rounded-full animate-bounce"></div>
+        <div className="absolute bottom-40 right-4 sm:right-10 w-1 h-1 bg-yellow-400 rounded-full animate-pulse"></div>
+      </div>
+      
+      {/* Grid Pattern Overlay - Less dense on mobile */}
+      <div className="absolute inset-0 opacity-5" style={{
+        backgroundImage: `
+          linear-gradient(cyan 1px, transparent 1px),
+          linear-gradient(90deg, cyan 1px, transparent 1px)
+        `,
+        backgroundSize: screenDimensions.width < 640 ? '30px 30px' : '50px 50px'
+      }}></div>
+
+      {/* Game Area */}
+      <div 
+        ref={gameAreaRef}
+        className="relative w-full h-screen"
+        style={{ 
+          touchAction: gameState === 'playing' ? 'none' : 'auto' // Prevent scrolling during gameplay
+        }}
+      >
+        {/* Start Screen */}
+        {gameState === 'start' && (
+          <StartScreen onStart={startGame} />
+        )}
+
+        {/* Game Playing State */}
+        {gameState === 'playing' && (
+          <>
+            <GameHUD 
+              score={score}
+              timeLeft={timeLeft}
+              stats={stats}
+              difficulty={difficulty}
+            />
+            
+            {/* Falling Objects */}
+            {fallingObjects.map((obj) => (
+              <FallingDataObject
+                key={obj.id}
+                position={obj.position}
+                speed={obj.speed}
+                onCatch={handleCatch}
+                onMiss={handleMiss}
+                gameActive={gameState === 'playing'}
+                screenHeight={screenDimensions.height}
+                screenWidth={screenDimensions.width}
+                difficulty={difficulty}
+              />
+            ))}
+          </>
+        )}
+
+        {/* Game Over Screen */}
+        {gameState === 'gameOver' && (
+          <GameOverScreen
+            finalScore={score}
+            stats={stats}
+            onRestart={restartGame}
+            onSaveScore={saveScore}
+            difficulty={difficulty}
+          />
+        )}
+      </div>
+    </div>
+  );
+}

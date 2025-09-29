@@ -1,0 +1,259 @@
+import React, { useState, useEffect } from 'react';
+import { FileText, Mail, MessageSquare, Shield, AlertTriangle } from 'lucide-react';
+
+const dataTypes = [
+  { 
+    type: 'email', 
+    icon: Mail,
+    aiContent: {
+      easy: [
+        "URGENT: Your account has been compromised. Click here immediately to secure it.",
+        "Congratulations! You've won $10,000. Provide your banking details to claim.",
+        "System Alert: Verify your identity to prevent account suspension."
+      ],
+      medium: [
+        "Hi, I'm reaching out regarding your recent inquiry. Please confirm your details.",
+        "Your subscription will expire soon. Update payment information to continue service.",
+        "Security notice: Unusual activity detected. Please verify your account."
+      ],
+      hard: [
+        "Thanks for reaching out! I'd be happy to help with your project requirements.",
+        "Quick question about the meeting tomorrow - should we reschedule to 3 PM?",
+        "Following up on our conversation, here's the document you requested."
+      ]
+    },
+    humanContent: {
+      easy: [
+        "Hi team, let's schedule our weekly meeting for Thursday at 2 PM.",
+        "Thanks for the great presentation yesterday. Looking forward to collaborating.",
+        "Happy birthday! Hope you have a wonderful day celebrating."
+      ],
+      medium: [
+        "Could you review the quarterly report when you have a moment?",
+        "The client loved the proposal! Let's discuss next steps on Monday.",
+        "Reminder: Office will be closed next Friday for the holiday."
+      ],
+      hard: [
+        "Please find the updated contract terms attached for your review.",
+        "Your recent transaction has been processed successfully. Reference: #12345",
+        "We've received your application and will contact you within 48 hours."
+      ]
+    }
+  },
+  {
+    type: 'message',
+    icon: MessageSquare,
+    aiContent: {
+      easy: [
+        "Download this attachment to update your security settings instantly.",
+        "Your package is pending delivery. Update shipping information now.",
+        "Account verification required. Complete within 24 hours or lose access."
+      ],
+      medium: [
+        "Can you send me the login credentials for the new system?",
+        "I'm having trouble accessing the server. What's the admin password?",
+        "Please share the client database for the presentation tomorrow."
+      ],
+      hard: [
+        "Hey, can you check if the Jenkins build is working on your end?",
+        "The API endpoint seems to be returning inconsistent data lately.",
+        "Should we migrate the production database during the maintenance window?"
+      ]
+    },
+    humanContent: {
+      easy: [
+        "Can you pick up milk on your way home?",
+        "The project deadline has been moved to next Friday.",
+        "Great job on the client presentation today!"
+      ],
+      medium: [
+        "Coffee meeting at 3 PM in the main conference room.",
+        "Don't forget to submit your timesheet by end of day.",
+        "The server maintenance is scheduled for tonight at 11 PM."
+      ],
+      hard: [
+        "Your login attempt was successful. Welcome to the dashboard.",
+        "System backup completed successfully at 2:30 AM.",
+        "Database optimization finished. Performance should be improved."
+      ]
+    }
+  },
+  {
+    type: 'document',
+    icon: FileText,
+    aiContent: {
+      easy: [
+        "CONFIDENTIAL_REPORT_2024.pdf - Contains sensitive financial data",
+        "employee_passwords_backup.xlsx - Critical system access codes",
+        "client_database_export.csv - Personal information of 10,000+ users"
+      ],
+      medium: [
+        "salary_info_2024.xlsx - Employee compensation details",
+        "customer_payment_data.csv - Credit card and billing information",
+        "internal_strategy_2024.pdf - Confidential business plans"
+      ],
+      hard: [
+        "Q4_financial_summary.pdf - Standard quarterly report",
+        "team_contact_list.xlsx - Internal directory information",
+        "project_timeline_2024.pdf - Public project milestones"
+      ]
+    },
+    humanContent: {
+      easy: [
+        "meeting_notes_march.docx - Team discussion summary",
+        "vacation_request_form.pdf - Standard HR document",
+        "company_newsletter.pdf - Monthly employee update"
+      ],
+      medium: [
+        "training_materials_2024.pdf - Employee development resources",
+        "office_policies.docx - Updated workplace guidelines",
+        "team_building_agenda.pdf - Upcoming event planning"
+      ],
+      hard: [
+        "api_documentation_v2.pdf - Technical implementation guide",
+        "security_audit_report.pdf - Recent compliance assessment",
+        "backup_configuration.txt - System recovery procedures"
+      ]
+    }
+  }
+];
+
+export default function FallingDataObject({ 
+  position, 
+  speed, 
+  onCatch, 
+  onMiss, 
+  gameActive,
+  screenHeight,
+  screenWidth,
+  difficulty = 'medium'
+}) {
+  const [currentY, setCurrentY] = useState(-100);
+  const [isVisible, setIsVisible] = useState(true);
+  const [isCaught, setIsCaught] = useState(false);
+  
+  // Randomly select data type and content based on difficulty
+  const [dataObj] = useState(() => {
+    const typeData = dataTypes[Math.floor(Math.random() * dataTypes.length)];
+    const isAI = Math.random() > 0.5;
+    
+    const contentArray = isAI 
+      ? typeData.aiContent[difficulty]
+      : typeData.humanContent[difficulty];
+    
+    const content = contentArray[Math.floor(Math.random() * contentArray.length)];
+    
+    return {
+      ...typeData,
+      content,
+      isAI,
+      id: Math.random().toString(36).substr(2, 9)
+    };
+  });
+
+  useEffect(() => {
+    if (!gameActive || isCaught) return;
+
+    const moveInterval = setInterval(() => {
+      setCurrentY(prev => {
+        const newY = prev + speed;
+        if (newY > screenHeight + 100) {
+          if (dataObj.isAI) {
+            onMiss('ai-missed');
+          }
+          setIsVisible(false);
+          return prev;
+        }
+        return newY;
+      });
+    }, 16);
+
+    return () => clearInterval(moveInterval);
+  }, [gameActive, speed, screenHeight, isCaught, dataObj.isAI, onMiss]);
+
+  const handleClick = () => {
+    if (!gameActive || isCaught) return;
+    
+    setIsCaught(true);
+    setIsVisible(false);
+    
+    if (dataObj.isAI) {
+      onCatch('correct', 100);
+    } else {
+      onCatch('wrong', -50);
+    }
+  };
+
+  if (!isVisible) return null;
+
+  const IconComponent = dataObj.icon;
+  const isMobile = screenWidth < 640;
+  
+  // Adjust size based on difficulty
+  const getSizeMultiplier = () => {
+    switch (difficulty) {
+      case 'easy': return 1.1;
+      case 'hard': return 0.8;
+      default: return 1;
+    }
+  };
+  
+  const sizeMultiplier = getSizeMultiplier();
+  const maxWidth = isMobile 
+    ? screenWidth * 0.8 * sizeMultiplier 
+    : Math.min(320 * sizeMultiplier, screenWidth * 0.4);
+
+  return (
+    <div
+      className={`absolute cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95 ${
+        isCaught ? 'animate-pulse' : ''
+      }`}
+      style={{
+        left: `${position}px`,
+        top: `${currentY}px`,
+        transform: 'translateX(-50%)',
+        maxWidth: `${maxWidth}px`,
+        touchAction: 'manipulation'
+      }}
+      onClick={handleClick}
+    >
+      <div className={`
+        relative p-3 sm:p-4 rounded-lg border-2 backdrop-blur-sm transition-all duration-300
+        ${dataObj.isAI 
+          ? 'bg-red-900/30 border-red-400 shadow-lg shadow-red-400/20 hover:shadow-red-400/40' 
+          : 'bg-blue-900/30 border-blue-400 shadow-lg shadow-blue-400/20 hover:shadow-blue-400/40'
+        }
+        min-h-[80px] sm:min-h-[100px]
+        ${difficulty === 'hard' ? 'scale-90' : difficulty === 'easy' ? 'scale-110' : ''}
+      `}>
+        <div className="flex items-start gap-2 sm:gap-3">
+          <div className={`
+            p-1.5 sm:p-2 rounded-lg flex-shrink-0
+            ${dataObj.isAI ? 'bg-red-500/20 text-red-300' : 'bg-blue-500/20 text-blue-300'}
+          `}>
+            <IconComponent className="w-4 h-4 sm:w-5 sm:h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className={`
+              text-xs font-medium mb-1 uppercase tracking-wide
+              ${dataObj.isAI ? 'text-red-300' : 'text-blue-300'}
+            `}>
+              {dataObj.type}
+            </div>
+            <div className="text-xs sm:text-sm text-gray-200 leading-tight">
+              {dataObj.content.length > (isMobile ? 80 : 120) 
+                ? dataObj.content.substring(0, isMobile ? 80 : 120) + '...' 
+                : dataObj.content
+              }
+            </div>
+          </div>
+          {dataObj.isAI && (
+            <div className="flex-shrink-0">
+              <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4 text-red-400" />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
